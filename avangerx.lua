@@ -1823,24 +1823,37 @@ UnitsUpdateSection:AddButton({
 
 -- Tạo 6 thanh kéo cho 6 slot
 for i = 1, 6 do
-    UnitsUpdateSection:AddSlider("Slot" .. i .. "LevelSlider", {
-        Title = "Slot " .. i .. " Level",
-        Default = unitSlotLevels[i] > 0 and unitSlotLevels[i] or 0.1,
-        Min = 0.1,
-        Max = 10,
-        Rounding = 0,
+    UnitsUpdateSection:AddTextbox({
+        Title = "Slot " .. i .. " Level (0-10)",
+        Default = tostring(unitSlotLevels[i]),
+        TextDisappear = false,
         Callback = function(Value)
-            -- Làm tròn giá trị
-            local roundedValue = math.floor(Value + 0.5)
-            -- Xử lý đặc biệt cho giá trị nhỏ
-            if Value < 0.5 then
-                roundedValue = 0
+            -- Chuyển đổi input thành số
+            local numberValue = tonumber(Value)
+            
+            -- Kiểm tra và giới hạn giá trị
+            if not numberValue then
+                numberValue = 0 -- Giá trị mặc định nếu không phải số
+            elseif numberValue < 0 then
+                numberValue = 0 -- Không cho phép giá trị âm
+            elseif numberValue > 10 then
+                numberValue = 10 -- Giới hạn tối đa là 10
             end
             
-            unitSlotLevels[i] = roundedValue
-            ConfigSystem.CurrentConfig["Slot" .. i .. "Level"] = roundedValue
+            -- Làm tròn thành số nguyên
+            numberValue = math.floor(numberValue)
+            
+            unitSlotLevels[i] = numberValue
+            ConfigSystem.CurrentConfig["Slot" .. i .. "Level"] = numberValue
             ConfigSystem.SaveConfig()
-            print("Đã đặt cấp độ slot " .. i .. " thành: " .. roundedValue)
+            
+            Fluent:Notify({
+                Title = "Slot " .. i .. " Level",
+                Content = "Đã đặt cấp độ thành: " .. numberValue,
+                Duration = 1
+            })
+            
+            print("Đã đặt cấp độ slot " .. i .. " thành: " .. numberValue)
         end
     })
 end
