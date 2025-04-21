@@ -1821,37 +1821,23 @@ UnitsUpdateSection:AddButton({
     end
 })
 
--- Tạo 6 thanh kéo cho 6 slot
+-- Tạo 6 dropdown cho 6 slot
 for i = 1, 6 do
-    UnitsUpdateSection:AddTextbox({
-        Title = "Slot " .. i .. " Level (0-10)",
+    UnitsUpdateSection:AddDropdown("Slot" .. i .. "LevelDropdown", {
+        Title = "Slot " .. i .. " Level",
+        Values = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"},
+        Multi = false,
         Default = tostring(unitSlotLevels[i]),
-        TextDisappear = false,
         Callback = function(Value)
-            -- Chuyển đổi input thành số
+            -- Chuyển đổi giá trị thành số
             local numberValue = tonumber(Value)
-            
-            -- Kiểm tra và giới hạn giá trị
             if not numberValue then
-                numberValue = 0 -- Giá trị mặc định nếu không phải số
-            elseif numberValue < 0 then
-                numberValue = 0 -- Không cho phép giá trị âm
-            elseif numberValue > 10 then
-                numberValue = 10 -- Giới hạn tối đa là 10
+                numberValue = 0
             end
-            
-            -- Làm tròn thành số nguyên
-            numberValue = math.floor(numberValue)
             
             unitSlotLevels[i] = numberValue
             ConfigSystem.CurrentConfig["Slot" .. i .. "Level"] = numberValue
             ConfigSystem.SaveConfig()
-            
-            Fluent:Notify({
-                Title = "Slot " .. i .. " Level",
-                Content = "Đã đặt cấp độ thành: " .. numberValue,
-                Duration = 1
-            })
             
             print("Đã đặt cấp độ slot " .. i .. " thành: " .. numberValue)
         end
