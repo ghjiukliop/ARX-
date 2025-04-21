@@ -93,7 +93,12 @@ ConfigSystem.DefaultConfig = {
     
     -- Cài đặt Boss Event
     AutoBossEvent = false,
-    BossEventTimeDelay = 5
+    BossEventTimeDelay = 5,
+    
+    -- Cài đặt In-Game
+    AutoPlay = false,
+    AutoRetry = false,
+    AutoNext = false
 }
 ConfigSystem.CurrentConfig = {}
 
@@ -183,6 +188,13 @@ local autoJoinRangerLoop = nil
 local autoBossEventEnabled = ConfigSystem.CurrentConfig.AutoBossEvent or false
 local autoBossEventLoop = nil
 
+-- Biến lưu trạng thái In-Game
+local autoPlayEnabled = ConfigSystem.CurrentConfig.AutoPlay or false
+local autoRetryEnabled = ConfigSystem.CurrentConfig.AutoRetry or false
+local autoNextEnabled = ConfigSystem.CurrentConfig.AutoNext or false
+local autoRetryLoop = nil
+local autoNextLoop = nil
+
 -- Biến lưu trạng thái Time Delay
 local storyTimeDelay = ConfigSystem.CurrentConfig.StoryTimeDelay or 5
 local rangerTimeDelay = ConfigSystem.CurrentConfig.RangerTimeDelay or 5
@@ -212,6 +224,12 @@ local InfoTab = Window:AddTab({
 local PlayTab = Window:AddTab({
     Title = "Play",
     Icon = "rbxassetid://7743871480"
+})
+
+-- Tạo tab In-Game
+local InGameTab = Window:AddTab({
+    Title = "In-Game",
+    Icon = "rbxassetid://7734039270"
 })
 
 -- Tạo tab Shop
@@ -1436,5 +1454,185 @@ BossEventSection:AddToggle("AutoJoinBossEventToggle", {
             })
         end
     end
+})
+
+-- Thêm section In-Game Controls
+local InGameSection = InGameTab:AddSection("Game Controls")
+
+-- Hàm để bật/tắt Auto Play
+local function toggleAutoPlay()
+    local success, err = pcall(function()
+        local AutoPlayRemote = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "Units", "AutoPlay"}, 2)
+        
+        if AutoPlayRemote then
+            AutoPlayRemote:FireServer()
+            print("Đã toggle Auto Play")
+        else
+            warn("Không tìm thấy Remote AutoPlay")
+        end
+    end)
+    
+    if not success then
+        warn("Lỗi khi toggle Auto Play: " .. tostring(err))
+    end
+end
+
+-- Hàm để bật/tắt Auto Retry
+local function toggleAutoRetry()
+    local success, err = pcall(function()
+        local AutoRetryRemote = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "OnGame", "Voting", "VoteRetry"}, 2)
+        
+        if AutoRetryRemote then
+            AutoRetryRemote:FireServer()
+            print("Đã toggle Auto Retry")
+        else
+            warn("Không tìm thấy Remote VoteRetry")
+        end
+    end)
+    
+    if not success then
+        warn("Lỗi khi toggle Auto Retry: " .. tostring(err))
+    end
+end
+
+-- Hàm để bật/tắt Auto Next
+local function toggleAutoNext()
+    local success, err = pcall(function()
+        local AutoNextRemote = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "OnGame", "Voting", "VoteNext"}, 2)
+        
+        if AutoNextRemote then
+            AutoNextRemote:FireServer()
+            print("Đã toggle Auto Next")
+        else
+            warn("Không tìm thấy Remote VoteNext")
+        end
+    end)
+    
+    if not success then
+        warn("Lỗi khi toggle Auto Next: " .. tostring(err))
+    end
+end
+
+-- Toggle Auto Play
+InGameSection:AddToggle("AutoPlayToggle", {
+    Title = "Auto Play",
+    Default = ConfigSystem.CurrentConfig.AutoPlay or false,
+    Callback = function(Value)
+        autoPlayEnabled = Value
+        ConfigSystem.CurrentConfig.AutoPlay = Value
+        ConfigSystem.SaveConfig()
+        
+        toggleAutoPlay()
+        
+        if Value then
+            Fluent:Notify({
+                Title = "Auto Play",
+                Content = "Auto Play đã được bật",
+                Duration = 2
+            })
+        else
+            Fluent:Notify({
+                Title = "Auto Play",
+                Content = "Auto Play đã được tắt",
+                Duration = 2
+            })
+        end
+    end
+})
+
+-- Toggle Auto Retry
+InGameSection:AddToggle("AutoRetryToggle", {
+    Title = "Auto Retry",
+    Default = ConfigSystem.CurrentConfig.AutoRetry or false,
+    Callback = function(Value)
+        autoRetryEnabled = Value
+        ConfigSystem.CurrentConfig.AutoRetry = Value
+        ConfigSystem.SaveConfig()
+        
+        if Value then
+            Fluent:Notify({
+                Title = "Auto Retry",
+                Content = "Auto Retry đã được bật",
+                Duration = 2
+            })
+            
+            -- Hủy vòng lặp cũ nếu có
+            if autoRetryLoop then
+                autoRetryLoop:Disconnect()
+                autoRetryLoop = nil
+            end
+            
+            -- Tạo vòng lặp mới
+            spawn(function()
+                while autoRetryEnabled and wait(3) do -- Gửi yêu cầu mỗi 3 giây
+                    toggleAutoRetry()
+                end
+            end)
+        else
+            Fluent:Notify({
+                Title = "Auto Retry",
+                Content = "Auto Retry đã được tắt",
+                Duration = 2
+            })
+            
+            -- Hủy vòng lặp nếu có
+            if autoRetryLoop then
+                autoRetryLoop:Disconnect()
+                autoRetryLoop = nil
+            end
+        end
+    end
+})
+
+-- Toggle Auto Next
+InGameSection:AddToggle("AutoNextToggle", {
+    Title = "Auto Next",
+    Default = ConfigSystem.CurrentConfig.AutoNext or false,
+    Callback = function(Value)
+        autoNextEnabled = Value
+        ConfigSystem.CurrentConfig.AutoNext = Value
+        ConfigSystem.SaveConfig()
+        
+        if Value then
+            Fluent:Notify({
+                Title = "Auto Next",
+                Content = "Auto Next đã được bật",
+                Duration = 2
+            })
+            
+            -- Hủy vòng lặp cũ nếu có
+            if autoNextLoop then
+                autoNextLoop:Disconnect()
+                autoNextLoop = nil
+            end
+            
+            -- Tạo vòng lặp mới
+            spawn(function()
+                while autoNextEnabled and wait(3) do -- Gửi yêu cầu mỗi 3 giây
+                    toggleAutoNext()
+                end
+            end)
+        else
+            Fluent:Notify({
+                Title = "Auto Next",
+                Content = "Auto Next đã được tắt",
+                Duration = 2
+            })
+            
+            -- Hủy vòng lặp nếu có
+            if autoNextLoop then
+                autoNextLoop:Disconnect()
+                autoNextLoop = nil
+            end
+        end
+    end
+})
+
+-- Thêm section thông tin In-Game
+local InGameInfoSection = InGameTab:AddSection("Thông tin")
+
+InGameInfoSection:AddParagraph({
+    Title = "Chú thích",
+    Content = "- Auto Play: Tự động điều khiển nhân vật trong game\n- Auto Retry: Tự động bình chọn thử lại khi thất bại\n- Auto Next: Tự động bình chọn để tiếp tục khi hoàn thành"
 })
 
