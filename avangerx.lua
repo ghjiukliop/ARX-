@@ -109,7 +109,10 @@ ConfigSystem.DefaultConfig = {
     Slot3Level = 0,
     Slot4Level = 0,
     Slot5Level = 0,
-    Slot6Level = 0
+    Slot6Level = 0,
+    
+    -- Cài đặt AFK
+    AutoJoinAFK = false
 }
 ConfigSystem.CurrentConfig = {}
 
@@ -227,6 +230,10 @@ local unitSlots = {}
 local storyTimeDelay = ConfigSystem.CurrentConfig.StoryTimeDelay or 5
 local rangerTimeDelay = ConfigSystem.CurrentConfig.RangerTimeDelay or 5
 local bossEventTimeDelay = ConfigSystem.CurrentConfig.BossEventTimeDelay or 5
+
+-- Biến lưu trạng thái AFK
+local autoJoinAFKEnabled = ConfigSystem.CurrentConfig.AutoJoinAFK or false
+local autoJoinAFKLoop = nil
 
 -- Thông tin người chơi
 local playerName = game:GetService("Players").LocalPlayer.Name
@@ -2028,5 +2035,149 @@ spawn(function()
         end
         
         print("Đã cập nhật trạng thái Auto Play từ game: " .. (actualState and "bật" or "tắt"))
+    end
+end)
+
+-- Hàm để kiểm tra trạng thái AFKWorld
+local function checkAFKWorldState()
+    local success, result = pcall(function()
+        local afkWorldValue = game:GetService("ReplicatedStorage"):WaitForChild("Values", 1):WaitForChild("AFKWorld", 1)
+        if afkWorldValue then
+            return afkWorldValue.Value
+        end
+        return false
+    end)
+    
+    if not success then
+        warn("Lỗi khi kiểm tra trạng thái AFKWorld: " .. tostring(result))
+        return false
+    end
+    
+    return result
+end
+
+-- Hàm để tham gia AFK World
+local function joinAFKWorld()
+    local success, err = pcall(function()
+        -- Kiểm tra nếu người chơi đã ở AFKWorld
+        if checkAFKWorldState() then
+            print("Người chơi đã ở trong AFKWorld")
+            return
+        end
+        
+        local afkTeleportRemote = game:GetService("ReplicatedStorage"):WaitForChild("Remote", 1):WaitForChild("Server", 1):WaitForChild("Lobby", 1):WaitForChild("AFKWorldTeleport", 1)
+        
+        if afkTeleportRemote then
+            afkTeleportRemote:FireServer()
+            print("Đã gửi yêu cầu teleport đến AFKWorld")
+        else
+            warn("Không tìm thấy Remote AFKWorldTeleport")
+        end
+    end)
+    
+    if not success then
+        warn("Lỗi khi tham gia AFKWorld: " .. tostring(err))
+    end
+end
+
+-- Thêm section AFK vào tab Settings
+local AFKSection = SettingsTab:AddSection("AFK Settings")
+
+-- Toggle Auto Join AFK
+AFKSection:AddToggle("AutoJoinAFKToggle", {
+    Title = "Auto Join AFK",
+    Default = ConfigSystem.CurrentConfig.AutoJoinAFK or false,
+    Callback = function(Value)
+        autoJoinAFKEnabled = Value
+        ConfigSystem.CurrentConfig.AutoJoinAFK = Value
+        ConfigSystem.SaveConfig()
+        
+        if Value then
+            -- Kiểm tra trạng thái AFKWorld
+            local isInAFKWorld = checkAFKWorldState()
+            
+            Fluent:Notify({
+                Title = "Auto Join AFK",
+                Content = "Auto Join AFK đã được bật",
+                Duration = 2
+            })
+            
+            -- Nếu không ở trong AFKWorld, teleport ngay lập tức
+            if not isInAFKWorld then
+                joinAFKWorld()
+            else
+                Fluent:Notify({
+                    Title = "AFKWorld",
+                    Content = "Bạn đã ở trong AFKWorld",
+                    Duration = 2
+                })
+            end
+            
+            -- Hủy vòng lặp cũ nếu có
+            if autoJoinAFKLoop then
+                autoJoinAFKLoop:Disconnect()
+                autoJoinAFKLoop = nil
+            end
+            
+            -- Tạo vòng lặp mới
+            spawn(function()
+                while autoJoinAFKEnabled and wait(60) do -- Kiểm tra mỗi 60 giây
+                    -- Chỉ teleport nếu không ở trong AFKWorld
+                    if not checkAFKWorldState() then
+                        joinAFKWorld()
+                    end
+                end
+            end)
+        else
+            Fluent:Notify({
+                Title = "Auto Join AFK",
+                Content = "Auto Join AFK đã được tắt",
+                Duration = 2
+            })
+            
+            -- Hủy vòng lặp nếu có
+            if autoJoinAFKLoop then
+                autoJoinAFKLoop:Disconnect()
+                autoJoinAFKLoop = nil
+            end
+        end
+    end
+})
+
+-- Nút Join AFK Now
+AFKSection:AddButton({
+    Title = "Join AFK Now",
+    Callback = function()
+        local isInAFKWorld = checkAFKWorldState()
+        
+        if isInAFKWorld then
+            Fluent:Notify({
+                Title = "AFKWorld",
+                Content = "Bạn đã ở trong AFKWorld",
+                Duration = 2
+            })
+            return
+        end
+        
+        joinAFKWorld()
+        
+        Fluent:Notify({
+            Title = "AFKWorld",
+            Content = "Đang teleport đến AFKWorld...",
+            Duration = 2
+        })
+    end
+})
+
+-- Tự động đồng bộ trạng thái từ game khi khởi động
+spawn(function()
+    wait(3) -- Đợi game load
+    
+    -- Kiểm tra nếu người chơi đã ở trong AFKWorld
+    local isInAFKWorld = checkAFKWorldState()
+    
+    -- Nếu Auto Join AFK được bật và người chơi không ở trong AFKWorld
+    if autoJoinAFKEnabled and not isInAFKWorld then
+        joinAFKWorld()
     end
 end)
