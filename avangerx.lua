@@ -66,7 +66,7 @@ local ConfigSystem = {}
 ConfigSystem.FileName = "HTHubARConfig_" .. game:GetService("Players").LocalPlayer.Name .. ".json"
 ConfigSystem.DefaultConfig = {
     -- Các cài đặt mặc định
-    UITheme = "Dark",
+    UITheme = "Amethyst",
     
     -- Cài đặt Shop/Summon
     SummonAmount = "x1",
@@ -211,7 +211,7 @@ local InfoTab = Window:AddTab({
 -- Tạo tab Play
 local PlayTab = Window:AddTab({
     Title = "Play",
-    Icon = "rbxassetid://7743878070"
+    Icon = "rbxassetid://7743871480"
 })
 
 -- Tạo tab Shop
@@ -667,37 +667,6 @@ StorySection:AddToggle("AutoJoinMapToggle", {
     end
 })
 
--- Nút Join Map (manual)
-StorySection:AddButton({
-    Title = "Join Map Now",
-    Callback = function()
-        -- Kiểm tra nếu người chơi đã ở trong map
-        if isPlayerInMap() then
-            Fluent:Notify({
-                Title = "Join Map",
-                Content = "Bạn đang ở trong map, không thể join map mới",
-                Duration = 2
-            })
-            return
-        end
-        
-        local success = joinMap()
-        
-        if success then
-            Fluent:Notify({
-                Title = "Join Map",
-                Content = "Đang tham gia map: " .. selectedDisplayMap .. " - " .. selectedChapter,
-                Duration = 2
-            })
-        else
-            Fluent:Notify({
-                Title = "Join Map",
-                Content = "Không thể tham gia map. Vui lòng thử lại sau.",
-                Duration = 2
-            })
-        end
-    end
-})
 
 -- Hiển thị trạng thái trong game
 StorySection:AddParagraph({
@@ -1355,38 +1324,6 @@ RangerSection:AddToggle("AutoJoinRangerToggle", {
     end
 })
 
--- Nút Join Ranger Stage (manual)
-RangerSection:AddButton({
-    Title = "Join Ranger Stage Now",
-    Callback = function()
-        -- Kiểm tra nếu người chơi đã ở trong map
-        if isPlayerInMap() then
-            Fluent:Notify({
-                Title = "Join Ranger Stage",
-                Content = "Bạn đang ở trong map, không thể join Ranger Stage mới",
-                Duration = 2
-            })
-            return
-        end
-        
-        local success = joinRangerStage()
-        
-        if success then
-            Fluent:Notify({
-                Title = "Join Ranger Stage",
-                Content = "Đang tham gia Ranger Stage: " .. selectedRangerDisplayMap .. " - " .. selectedAct,
-                Duration = 2
-            })
-        else
-            Fluent:Notify({
-                Title = "Join Ranger Stage",
-                Content = "Không thể tham gia Ranger Stage. Vui lòng thử lại sau.",
-                Duration = 2
-            })
-        end
-    end
-})
-
 -- Thêm section Boss Event trong tab Play
 local BossEventSection = PlayTab:AddSection("Boss Event")
 
@@ -1496,38 +1433,6 @@ BossEventSection:AddToggle("AutoJoinBossEventToggle", {
                 Title = "Auto Boss Event",
                 Content = "Auto Boss Event đã được tắt",
                 Duration = 3
-            })
-        end
-    end
-})
-
--- Nút tham gia Boss Event (manual)
-BossEventSection:AddButton({
-    Title = "Join Boss Event Now",
-    Callback = function()
-        -- Kiểm tra nếu người chơi đã ở trong map
-        if isPlayerInMap() then
-            Fluent:Notify({
-                Title = "Join Boss Event",
-                Content = "Bạn đang ở trong map, không thể tham gia Boss Event mới",
-                Duration = 2
-            })
-            return
-        end
-        
-        local success = joinBossEvent()
-        
-        if success then
-            Fluent:Notify({
-                Title = "Boss Event",
-                Content = "Đã gửi yêu cầu tham gia Boss Event",
-                Duration = 2
-            })
-        else
-            Fluent:Notify({
-                Title = "Boss Event",
-                Content = "Không thể tham gia Boss Event. Vui lòng thử lại sau.",
-                Duration = 2
             })
         end
     end
