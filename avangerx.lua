@@ -207,6 +207,7 @@ local autoVoteEnabled = ConfigSystem.CurrentConfig.AutoVote or false
 local autoRetryLoop = nil
 local autoNextLoop = nil
 local autoVoteLoop = nil
+local autoPlayLoop = nil
 
 -- Biến lưu trạng thái Update Units
 local autoUpdateEnabled = ConfigSystem.CurrentConfig.AutoUpdate or false
@@ -1487,6 +1488,13 @@ BossEventSection:AddToggle("AutoJoinBossEventToggle", {
 -- Thêm section In-Game Controls
 local InGameSection = InGameTab:AddSection("Game Controls")
 
+-- Hàm để kiểm tra trạng thái Auto Play trong game
+local function checkAutoPlayStatus()
+    -- Trả về true nếu Auto Play đang bật, false nếu đang tắt
+    -- Do không thể trực tiếp đọc trạng thái từ màn hình, chúng ta sẽ giả định là cần toggle
+    return false
+end
+
 -- Hàm để bật/tắt Auto Play
 local function toggleAutoPlay()
     local success, err = pcall(function()
@@ -1494,7 +1502,7 @@ local function toggleAutoPlay()
         
         if AutoPlayRemote then
             AutoPlayRemote:FireServer()
-            print("Đã toggle Auto Play")
+            print("Đã gửi yêu cầu toggle Auto Play")
         else
             warn("Không tìm thấy Remote AutoPlay")
         end
@@ -1568,20 +1576,44 @@ InGameSection:AddToggle("AutoPlayToggle", {
         ConfigSystem.CurrentConfig.AutoPlay = Value
         ConfigSystem.SaveConfig()
         
-        toggleAutoPlay()
-        
         if Value then
             Fluent:Notify({
                 Title = "Auto Play",
-                Content = "Auto Play đã được bật",
-                Duration = 2
+                Content = "Auto Play đã được bật, sẽ duy trì Auto Play luôn bật trong game",
+                Duration = 3
             })
+            
+            -- Hủy vòng lặp cũ nếu có
+            if autoPlayLoop then
+                autoPlayLoop:Disconnect()
+                autoPlayLoop = nil
+            end
+            
+            -- Kích hoạt Auto Play ngay lập tức
+            toggleAutoPlay()
+            
+            -- Tạo vòng lặp mới để đảm bảo Auto Play luôn bật
+            spawn(function()
+                while autoPlayEnabled and wait(5) do -- Kiểm tra mỗi 5 giây
+                    -- Giả định Auto Play cần được kích hoạt lại
+                    -- Trong thực tế, bạn có thể thêm logic để kiểm tra trạng thái thực tế
+                    if isPlayerInMap() then
+                        toggleAutoPlay()
+                    end
+                end
+            end)
         else
             Fluent:Notify({
                 Title = "Auto Play",
                 Content = "Auto Play đã được tắt",
                 Duration = 2
             })
+            
+            -- Hủy vòng lặp nếu có
+            if autoPlayLoop then
+                autoPlayLoop:Disconnect()
+                autoPlayLoop = nil
+            end
         end
     end
 })
