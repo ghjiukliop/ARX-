@@ -290,6 +290,16 @@ Window.Minimize = function()
     -- Hiển thị/ẩn logo dựa vào trạng thái
     if OpenUI then
         OpenUI.Enabled = isMinimized
+        
+        -- Đảm bảo logo vẫn hiển thị (phòng trường hợp bị ẩn do lỗi)
+        if isMinimized then
+            spawn(function()
+                wait(0.5) -- Đợi một chút để đảm bảo UI đã được cập nhật
+                if OpenUI and isMinimized then
+                    OpenUI.Enabled = true
+                end
+            end)
+        end
     end
     
     -- Gọi hàm minimize gốc
@@ -695,12 +705,28 @@ local statusLabel = StorySection:AddParagraph({
     Content = isPlayerInMap() and "Đang ở trong map" or "Đang ở sảnh chờ"
 })
 
+-- Sử dụng pcall để bọc gọi hàm SetContent để tránh lỗi
+local function safeSetContent(component, content)
+    if not component then return false end
+    
+    local success, err = pcall(function()
+        component:SetContent(content)
+    end)
+    
+    if not success then
+        warn("Lỗi khi set content: " .. tostring(err))
+        return false
+    end
+    
+    return true
+end
+
 -- Cập nhật trạng thái định kỳ
 local statusUpdateTimer = nil
 statusUpdateTimer = spawn(function()
     while wait(5) do
         if statusLabel then
-            statusLabel:SetContent(isPlayerInMap() and "Đang ở trong map" or "Đang ở sảnh chờ")
+            safeSetContent(statusLabel, isPlayerInMap() and "Đang ở trong map" or "Đang ở sảnh chờ")
         end
     end
 end)
