@@ -229,7 +229,7 @@ local PlayTab = Window:AddTab({
 -- Tạo tab In-Game
 local InGameTab = Window:AddTab({
     Title = "In-Game",
-    Icon = "rbxassetid://7734039270"
+    Icon = "rbxassetid://7733799901"
 })
 
 -- Tạo tab Shop
