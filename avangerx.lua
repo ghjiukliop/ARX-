@@ -1825,15 +1825,22 @@ UnitsUpdateSection:AddButton({
 for i = 1, 6 do
     UnitsUpdateSection:AddSlider("Slot" .. i .. "LevelSlider", {
         Title = "Slot " .. i .. " Level",
-        Default = unitSlotLevels[i],
-        Min = 0,
+        Default = unitSlotLevels[i] > 0 and unitSlotLevels[i] or 0.1,
+        Min = 0.1,
         Max = 10,
         Rounding = 0,
         Callback = function(Value)
-            unitSlotLevels[i] = Value
-            ConfigSystem.CurrentConfig["Slot" .. i .. "Level"] = Value
+            -- Làm tròn giá trị
+            local roundedValue = math.floor(Value + 0.5)
+            -- Xử lý đặc biệt cho giá trị nhỏ
+            if Value < 0.5 then
+                roundedValue = 0
+            end
+            
+            unitSlotLevels[i] = roundedValue
+            ConfigSystem.CurrentConfig["Slot" .. i .. "Level"] = roundedValue
             ConfigSystem.SaveConfig()
-            print("Đã đặt cấp độ slot " .. i .. " thành: " .. Value)
+            print("Đã đặt cấp độ slot " .. i .. " thành: " .. roundedValue)
         end
     })
 end
@@ -1870,7 +1877,7 @@ UnitsUpdateSection:AddToggle("AutoUpdateToggle", {
                     if isPlayerInMap() then
                         -- Lặp qua từng slot và nâng cấp theo cấp độ đã chọn
                         for i = 1, 6 do
-                            if unitSlots[i] then
+                            if unitSlots[i] and unitSlotLevels[i] > 0 then
                                 for j = 1, unitSlotLevels[i] do
                                     upgradeUnit(unitSlots[i])
                                     wait(0.1) -- Chờ một chút giữa các lần nâng cấp
