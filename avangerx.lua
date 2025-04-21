@@ -22,30 +22,6 @@ if not Fluent then
     return
 end
 
--- Vô hiệu hóa các cảnh báo lỗi không cần thiết
-local originalWarn = warn
-warn = function(...)
-    if not string.find(tostring(...), "attempt to index nil with 'WaitForChild'") then
-        originalWarn(...)
-    end
-end
-
--- Wrapper an toàn cho WaitForChild
-local safeWaitForChild = function(parent, childName, timeOut)
-    if not parent then return nil end
-    timeOut = timeOut or 1
-    
-    local success, result = pcall(function()
-        return parent:WaitForChild(childName, timeOut)
-    end)
-    
-    if success then
-        return result
-    else
-        return nil
-    end
-end
-
 -- Utility function để kiểm tra và lấy service/object một cách an toàn
 local function safeGetService(serviceName)
     local service = nil
@@ -65,7 +41,7 @@ local function safeGetChild(parent, childName, waitTime)
     local success = pcall(function()
         child = parent:FindFirstChild(childName)
         if not child and waitTime > 0 then
-            child = safeWaitForChild(parent, childName, waitTime)
+            child = parent:WaitForChild(childName, waitTime)
         end
     end)
     
@@ -116,7 +92,8 @@ ConfigSystem.DefaultConfig = {
     RangerTimeDelay = 5,
     
     -- Cài đặt Boss Event
-    AutoBossEvent = false
+    AutoBossEvent = false,
+    BossEventTimeDelay = 5
 }
 ConfigSystem.CurrentConfig = {}
 
@@ -202,52 +179,17 @@ local rangerFriendOnly = ConfigSystem.CurrentConfig.RangerFriendOnly or false
 local autoJoinRangerEnabled = ConfigSystem.CurrentConfig.AutoJoinRanger or false
 local autoJoinRangerLoop = nil
 
+-- Biến lưu trạng thái Boss Event
+local autoBossEventEnabled = ConfigSystem.CurrentConfig.AutoBossEvent or false
+local autoBossEventLoop = nil
+
 -- Biến lưu trạng thái Time Delay
 local storyTimeDelay = ConfigSystem.CurrentConfig.StoryTimeDelay or 5
 local rangerTimeDelay = ConfigSystem.CurrentConfig.RangerTimeDelay or 5
-
--- Biến lưu trạng thái Boss Event
-local autoBossEventEnabled = ConfigSystem.CurrentConfig.AutoBossEvent or false
+local bossEventTimeDelay = ConfigSystem.CurrentConfig.BossEventTimeDelay or 5
 
 -- Thông tin người chơi
 local playerName = game:GetService("Players").LocalPlayer.Name
-
--- Cache cho các đường dẫn hay sử dụng để tránh gọi WaitForChild nhiều lần
-local ReplicatedStorage = safeGetService("ReplicatedStorage")
-local PathCache = {
-    PlayRoomEvent = nil,
-    UnitsGacha = nil,
-    QuestEvent = nil
-}
-
--- Hàm lazy loading cho các đường dẫn thường dùng
-local function getPathFromCache(cacheName, getPathFunc)
-    if not PathCache[cacheName] then
-        PathCache[cacheName] = getPathFunc()
-    end
-    return PathCache[cacheName]
-end
-
--- Hàm lấy PlayRoom Event
-local function getPlayRoomEvent()
-    return getPathFromCache("PlayRoomEvent", function()
-        return safeGetPath(ReplicatedStorage, {"Remote", "Server", "PlayRoom", "Event"}, 2)
-    end)
-end
-
--- Hàm lấy Units Gacha
-local function getUnitsGacha()
-    return getPathFromCache("UnitsGacha", function() 
-        return safeGetPath(ReplicatedStorage, {"Remote", "Server", "Gambling", "UnitsGacha"}, 2)
-    end)
-end
-
--- Hàm lấy Quest Event
-local function getQuestEvent()
-    return getPathFromCache("QuestEvent", function()
-        return safeGetPath(ReplicatedStorage, {"Remote", "Server", "Gameplay", "QuestEvent"}, 2)
-    end)
-end
 
 -- Tạo Window
 local Window = Fluent:CreateWindow({
@@ -391,9 +333,6 @@ end
 -- Thêm section Story trong tab Play
 local StorySection = PlayTab:AddSection("Story")
 
--- Thêm section Boss Event trong tab Play
-local BossEventSection = PlayTab:AddSection("Boss Event")
-
 -- Hàm để thay đổi map
 local function changeWorld(worldDisplay)
     local success, err = pcall(function()
@@ -450,7 +389,7 @@ end
 -- Hàm để thay đổi difficulty
 local function changeDifficulty(difficulty)
     local success, err = pcall(function()
-        local Event = getPlayRoomEvent()
+        local Event = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "PlayRoom", "Event"}, 2)
         
         if Event then
             local args = {
@@ -1052,35 +991,6 @@ AutoSaveConfig()
 -- Thiết lập events
 setupSaveEvents()
 
--- Khởi tạo các đường dẫn cần thiết khi game bắt đầu
-spawn(function()
-    -- Khởi tạo cache ban đầu
-    local PlayRoomEvent = getPlayRoomEvent()
-    local UnitsGacha = getUnitsGacha()
-    local QuestEvent = getQuestEvent()
-    
-    -- Khắc phục lỗi UIS.Store
-    if ReplicatedStorage then
-        if not ReplicatedStorage:FindFirstChild("UIS") then
-            local UIS = Instance.new("Folder")
-            UIS.Name = "UIS"
-            UIS.Parent = ReplicatedStorage
-            
-            local Store = Instance.new("Folder")
-            Store.Name = "Store"
-            Store.Parent = UIS
-            
-            print("Đã tạo UIS.Store để tránh lỗi")
-        elseif not ReplicatedStorage.UIS:FindFirstChild("Store") then
-            local Store = Instance.new("Folder")
-            Store.Name = "Store"
-            Store.Parent = ReplicatedStorage.UIS
-            
-            print("Đã tạo UIS.Store để tránh lỗi")
-        end
-    end
-end)
-
 -- Kiểm tra trạng thái người chơi khi script khởi động
 if isPlayerInMap() then
     Fluent:Notify({
@@ -1121,16 +1031,17 @@ else
         end)
     end
     
-    -- Nếu Auto Boss Event được bật, khởi động vòng lặp
+    -- Nếu Auto Boss Event được bật, thực hiện join boss event sau time delay
     if autoBossEventEnabled then
         Fluent:Notify({
-            Title = "Auto Boss Event",
-            Content = "Auto Boss Event đã được bật",
+            Title = "Auto Join",
+            Content = "Sẽ tham gia Boss Event sau " .. bossEventTimeDelay .. " giây",
             Duration = 3
         })
         
         spawn(function()
-            while autoBossEventEnabled and wait(10) do
+            wait(bossEventTimeDelay) -- Chờ theo time delay đã đặt
+            if autoBossEventEnabled and not isPlayerInMap() then
                 joinBossEvent()
             end
         end)
@@ -1459,30 +1370,60 @@ RangerSection:AddButton({
     end
 })
 
--- Hàm để tự động tham gia Boss Event
+-- Thêm section Boss Event trong tab Play
+local BossEventSection = PlayTab:AddSection("Boss Event")
+
+-- Hàm để tham gia Boss Event
 local function joinBossEvent()
+    -- Kiểm tra xem người chơi đã ở trong map chưa
+    if isPlayerInMap() then
+        print("Đã phát hiện người chơi đang ở trong map, không thực hiện join Boss Event")
+        return false
+    end
+    
     local success, err = pcall(function()
-        local Event = getPlayRoomEvent()
+        -- Lấy Event
+        local Event = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "PlayRoom", "Event"}, 2)
         
-        if Event then
-            local args = {
-                [1] = "Boss-Event"
-            }
-            
-            Event:FireServer(unpack(args))
-            print("Đã tham gia Boss Event")
-        else
+        if not Event then
             warn("Không tìm thấy Event để tham gia Boss Event")
+            return
         end
+        
+        -- Gọi Boss Event
+        local args = {
+            [1] = "Boss-Event"
+        }
+        
+        Event:FireServer(unpack(args))
+        print("Đã gửi yêu cầu tham gia Boss Event")
     end)
     
     if not success then
         warn("Lỗi khi tham gia Boss Event: " .. tostring(err))
+        return false
     end
+    
+    return true
 end
 
--- Toggle Auto Boss Event
-BossEventSection:AddToggle("AutoBossEventToggle", {
+-- Time Delay slider cho Boss Event
+BossEventSection:AddSlider("BossEventTimeDelaySlider", {
+    Title = "Time Delay (giây)",
+    Default = bossEventTimeDelay,
+    Min = 1,
+    Max = 30,
+    Rounding = 1,
+    Callback = function(Value)
+        bossEventTimeDelay = Value
+        ConfigSystem.CurrentConfig.BossEventTimeDelay = Value
+        ConfigSystem.SaveConfig()
+        print("Đã đặt Boss Event Time Delay: " .. Value .. " giây")
+    end
+})
+
+-- Toggle Auto Join Boss Event
+BossEventSection:AddToggle("AutoJoinBossEventToggle", {
     Title = "Auto Boss Event",
     Default = ConfigSystem.CurrentConfig.AutoBossEvent or false,
     Callback = function(Value)
@@ -1490,17 +1431,47 @@ BossEventSection:AddToggle("AutoBossEventToggle", {
         ConfigSystem.CurrentConfig.AutoBossEvent = Value
         ConfigSystem.SaveConfig()
         
-        if Value then
-            Fluent:Notify({
-                Title = "Auto Boss Event",
-                Content = "Auto Boss Event đã được bật",
-                Duration = 3
-            })
+        if autoBossEventEnabled then
+            -- Kiểm tra ngay lập tức nếu người chơi đang ở trong map
+            if isPlayerInMap() then
+                Fluent:Notify({
+                    Title = "Auto Boss Event",
+                    Content = "Đang ở trong map, Auto Boss Event sẽ hoạt động khi bạn rời khỏi map",
+                    Duration = 3
+                })
+            else
+                Fluent:Notify({
+                    Title = "Auto Boss Event",
+                    Content = "Auto Boss Event đã được bật, sẽ bắt đầu sau " .. bossEventTimeDelay .. " giây",
+                    Duration = 3
+                })
+                
+                -- Thực hiện tham gia Boss Event sau thời gian delay
+                spawn(function()
+                    wait(bossEventTimeDelay)
+                    if autoBossEventEnabled and not isPlayerInMap() then
+                        joinBossEvent()
+                    end
+                end)
+            end
             
-            -- Tạo vòng lặp Auto Boss Event
+            -- Tạo vòng lặp Auto Join Boss Event
             spawn(function()
-                while autoBossEventEnabled and wait(10) do -- Thử tham gia Boss Event mỗi 10 giây
-                    joinBossEvent()
+                while autoBossEventEnabled and wait(30) do -- Thử join boss event mỗi 30 giây
+                    -- Chỉ thực hiện tham gia nếu người chơi không ở trong map
+                    if not isPlayerInMap() then
+                        -- Áp dụng time delay
+                        print("Đợi " .. bossEventTimeDelay .. " giây trước khi tham gia Boss Event")
+                        wait(bossEventTimeDelay)
+                        
+                        -- Kiểm tra lại sau khi delay
+                        if autoBossEventEnabled and not isPlayerInMap() then
+                            joinBossEvent()
+                        end
+                    else
+                        -- Người chơi đang ở trong map, không cần tham gia
+                        print("Đang ở trong map, đợi đến khi người chơi rời khỏi map")
+                    end
                 end
             end)
         else
@@ -1513,16 +1484,34 @@ BossEventSection:AddToggle("AutoBossEventToggle", {
     end
 })
 
--- Nút Join Boss Event (manual)
+-- Nút tham gia Boss Event (manual)
 BossEventSection:AddButton({
     Title = "Join Boss Event Now",
     Callback = function()
-        joinBossEvent()
+        -- Kiểm tra nếu người chơi đã ở trong map
+        if isPlayerInMap() then
+            Fluent:Notify({
+                Title = "Join Boss Event",
+                Content = "Bạn đang ở trong map, không thể tham gia Boss Event mới",
+                Duration = 2
+            })
+            return
+        end
         
-        Fluent:Notify({
-            Title = "Boss Event",
-            Content = "Đang tham gia Boss Event",
-            Duration = 2
-        })
+        local success = joinBossEvent()
+        
+        if success then
+            Fluent:Notify({
+                Title = "Boss Event",
+                Content = "Đã gửi yêu cầu tham gia Boss Event",
+                Duration = 2
+            })
+        else
+            Fluent:Notify({
+                Title = "Boss Event",
+                Content = "Không thể tham gia Boss Event. Vui lòng thử lại sau.",
+                Duration = 2
+            })
+        end
     end
 })
