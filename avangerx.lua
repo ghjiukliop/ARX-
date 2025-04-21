@@ -98,7 +98,8 @@ ConfigSystem.DefaultConfig = {
     -- Cài đặt In-Game
     AutoPlay = false,
     AutoRetry = false,
-    AutoNext = false
+    AutoNext = false,
+    AutoVote = false
 }
 ConfigSystem.CurrentConfig = {}
 
@@ -192,8 +193,10 @@ local autoBossEventLoop = nil
 local autoPlayEnabled = ConfigSystem.CurrentConfig.AutoPlay or false
 local autoRetryEnabled = ConfigSystem.CurrentConfig.AutoRetry or false
 local autoNextEnabled = ConfigSystem.CurrentConfig.AutoNext or false
+local autoVoteEnabled = ConfigSystem.CurrentConfig.AutoVote or false
 local autoRetryLoop = nil
 local autoNextLoop = nil
+local autoVoteLoop = nil
 
 -- Biến lưu trạng thái Time Delay
 local storyTimeDelay = ConfigSystem.CurrentConfig.StoryTimeDelay or 5
@@ -1513,6 +1516,24 @@ local function toggleAutoNext()
     end
 end
 
+-- Hàm để bật/tắt Auto Vote
+local function toggleAutoVote()
+    local success, err = pcall(function()
+        local AutoVoteRemote = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "OnGame", "Voting", "VotePlaying"}, 2)
+        
+        if AutoVoteRemote then
+            AutoVoteRemote:FireServer()
+            print("Đã toggle Auto Vote")
+        else
+            warn("Không tìm thấy Remote VotePlaying")
+        end
+    end)
+    
+    if not success then
+        warn("Lỗi khi toggle Auto Vote: " .. tostring(err))
+    end
+end
+
 -- Toggle Auto Play
 InGameSection:AddToggle("AutoPlayToggle", {
     Title = "Auto Play",
@@ -1628,11 +1649,55 @@ InGameSection:AddToggle("AutoNextToggle", {
     end
 })
 
+-- Toggle Auto Vote
+InGameSection:AddToggle("AutoVoteToggle", {
+    Title = "Auto Vote",
+    Default = ConfigSystem.CurrentConfig.AutoVote or false,
+    Callback = function(Value)
+        autoVoteEnabled = Value
+        ConfigSystem.CurrentConfig.AutoVote = Value
+        ConfigSystem.SaveConfig()
+        
+        if Value then
+            Fluent:Notify({
+                Title = "Auto Vote",
+                Content = "Auto Vote đã được bật",
+                Duration = 2
+            })
+            
+            -- Hủy vòng lặp cũ nếu có
+            if autoVoteLoop then
+                autoVoteLoop:Disconnect()
+                autoVoteLoop = nil
+            end
+            
+            -- Tạo vòng lặp mới
+            spawn(function()
+                while autoVoteEnabled and wait(3) do -- Gửi yêu cầu mỗi 3 giây
+                    toggleAutoVote()
+                end
+            end)
+        else
+            Fluent:Notify({
+                Title = "Auto Vote",
+                Content = "Auto Vote đã được tắt",
+                Duration = 2
+            })
+            
+            -- Hủy vòng lặp nếu có
+            if autoVoteLoop then
+                autoVoteLoop:Disconnect()
+                autoVoteLoop = nil
+            end
+        end
+    end
+})
+
 -- Thêm section thông tin In-Game
 local InGameInfoSection = InGameTab:AddSection("Thông tin")
 
 InGameInfoSection:AddParagraph({
     Title = "Chú thích",
-    Content = "- Auto Play: Tự động điều khiển nhân vật trong game\n- Auto Retry: Tự động bình chọn thử lại khi thất bại\n- Auto Next: Tự động bình chọn để tiếp tục khi hoàn thành"
+    Content = "- Auto Vote: Tự động bình chọn đang chơi\n- Auto Play: Tự động điều khiển nhân vật trong game\n- Auto Retry: Tự động bình chọn thử lại khi thất bại\n- Auto Next: Tự động bình chọn để tiếp tục khi hoàn thành"
 })
 
