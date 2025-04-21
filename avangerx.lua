@@ -207,7 +207,6 @@ local autoVoteEnabled = ConfigSystem.CurrentConfig.AutoVote or false
 local autoRetryLoop = nil
 local autoNextLoop = nil
 local autoVoteLoop = nil
-local autoPlayLoop = nil
 
 -- Biến lưu trạng thái Update Units
 local autoUpdateEnabled = ConfigSystem.CurrentConfig.AutoUpdate or false
@@ -1488,11 +1487,33 @@ BossEventSection:AddToggle("AutoJoinBossEventToggle", {
 -- Thêm section In-Game Controls
 local InGameSection = InGameTab:AddSection("Game Controls")
 
--- Hàm để kiểm tra trạng thái Auto Play trong game
-local function checkAutoPlayStatus()
-    -- Trả về true nếu Auto Play đang bật, false nếu đang tắt
-    -- Do không thể trực tiếp đọc trạng thái từ màn hình, chúng ta sẽ giả định là cần toggle
-    return false
+-- Hàm để kiểm tra trạng thái AutoPlay thực tế trong game
+local function checkActualAutoPlayState()
+    local success, result = pcall(function()
+        local player = game:GetService("Players").LocalPlayer
+        if not player then return false end
+        
+        local playerData = game:GetService("ReplicatedStorage"):FindFirstChild("Player_Data")
+        if not playerData then return false end
+        
+        local playerFolder = playerData:FindFirstChild(player.Name)
+        if not playerFolder then return false end
+        
+        local dataFolder = playerFolder:FindFirstChild("Data")
+        if not dataFolder then return false end
+        
+        local autoPlayValue = dataFolder:FindFirstChild("AutoPlay")
+        if not autoPlayValue then return false end
+        
+        return autoPlayValue.Value
+    end)
+    
+    if not success then
+        warn("Lỗi khi kiểm tra trạng thái AutoPlay: " .. tostring(result))
+        return false
+    end
+    
+    return result
 end
 
 -- Hàm để bật/tắt Auto Play
@@ -1502,7 +1523,7 @@ local function toggleAutoPlay()
         
         if AutoPlayRemote then
             AutoPlayRemote:FireServer()
-            print("Đã gửi yêu cầu toggle Auto Play")
+            print("Đã toggle Auto Play")
         else
             warn("Không tìm thấy Remote AutoPlay")
         end
@@ -1512,6 +1533,46 @@ local function toggleAutoPlay()
         warn("Lỗi khi toggle Auto Play: " .. tostring(err))
     end
 end
+
+-- Toggle Auto Play
+InGameSection:AddToggle("AutoPlayToggle", {
+    Title = "Auto Play",
+    Default = ConfigSystem.CurrentConfig.AutoPlay or false,
+    Callback = function(Value)
+        -- Cập nhật cấu hình
+        autoPlayEnabled = Value
+        ConfigSystem.CurrentConfig.AutoPlay = Value
+        ConfigSystem.SaveConfig()
+        
+        -- Kiểm tra trạng thái thực tế của AutoPlay
+        local actualState = checkActualAutoPlayState()
+        
+        -- Chỉ toggle khi trạng thái mong muốn khác với trạng thái hiện tại
+        if Value ~= actualState then
+            toggleAutoPlay()
+            
+            if Value then
+                Fluent:Notify({
+                    Title = "Auto Play",
+                    Content = "Auto Play đã được bật",
+                    Duration = 2
+                })
+            else
+                Fluent:Notify({
+                    Title = "Auto Play",
+                    Content = "Auto Play đã được tắt",
+                    Duration = 2
+                })
+            end
+        else
+            Fluent:Notify({
+                Title = "Auto Play",
+                Content = "Trạng thái Auto Play đã phù hợp (" .. (Value and "bật" or "tắt") .. ")",
+                Duration = 2
+            })
+        end
+    end
+})
 
 -- Hàm để bật/tắt Auto Retry
 local function toggleAutoRetry()
@@ -1566,57 +1627,6 @@ local function toggleAutoVote()
         warn("Lỗi khi toggle Auto Vote: " .. tostring(err))
     end
 end
-
--- Toggle Auto Play
-InGameSection:AddToggle("AutoPlayToggle", {
-    Title = "Auto Play",
-    Default = ConfigSystem.CurrentConfig.AutoPlay or false,
-    Callback = function(Value)
-        autoPlayEnabled = Value
-        ConfigSystem.CurrentConfig.AutoPlay = Value
-        ConfigSystem.SaveConfig()
-        
-        if Value then
-            Fluent:Notify({
-                Title = "Auto Play",
-                Content = "Auto Play đã được bật, sẽ duy trì Auto Play luôn bật trong game",
-                Duration = 3
-            })
-            
-            -- Hủy vòng lặp cũ nếu có
-            if autoPlayLoop then
-                autoPlayLoop:Disconnect()
-                autoPlayLoop = nil
-            end
-            
-            -- Kích hoạt Auto Play ngay lập tức
-            toggleAutoPlay()
-            
-            -- Tạo vòng lặp mới để đảm bảo Auto Play luôn bật
-            spawn(function()
-                while autoPlayEnabled and wait(5) do -- Kiểm tra mỗi 5 giây
-                    -- Giả định Auto Play cần được kích hoạt lại
-                    -- Trong thực tế, bạn có thể thêm logic để kiểm tra trạng thái thực tế
-                    if isPlayerInMap() then
-                        toggleAutoPlay()
-                    end
-                end
-            end)
-        else
-            Fluent:Notify({
-                Title = "Auto Play",
-                Content = "Auto Play đã được tắt",
-                Duration = 2
-            })
-            
-            -- Hủy vòng lặp nếu có
-            if autoPlayLoop then
-                autoPlayLoop:Disconnect()
-                autoPlayLoop = nil
-            end
-        end
-    end
-})
 
 -- Toggle Auto Retry
 InGameSection:AddToggle("AutoRetryToggle", {
@@ -1998,4 +2008,25 @@ UnitsUpdateSection:AddToggle("AutoUpdateRandomToggle", {
 spawn(function()
     wait(5) -- Đợi 5 giây để game load
     scanUnits()
+end)
+
+-- Tự động cập nhật trạng thái từ game khi khởi động
+spawn(function()
+    wait(3) -- Đợi game load
+    local actualState = checkActualAutoPlayState()
+    
+    -- Cập nhật cấu hình nếu trạng thái thực tế khác với cấu hình
+    if autoPlayEnabled ~= actualState then
+        autoPlayEnabled = actualState
+        ConfigSystem.CurrentConfig.AutoPlay = actualState
+        ConfigSystem.SaveConfig()
+        
+        -- Cập nhật UI nếu cần
+        local autoPlayToggle = InGameSection:GetComponent("AutoPlayToggle")
+        if autoPlayToggle and autoPlayToggle.Set then
+            autoPlayToggle:Set(actualState)
+        end
+        
+        print("Đã cập nhật trạng thái Auto Play từ game: " .. (actualState and "bật" or "tắt"))
+    end
 end)
