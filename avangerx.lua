@@ -99,7 +99,17 @@ ConfigSystem.DefaultConfig = {
     AutoPlay = false,
     AutoRetry = false,
     AutoNext = false,
-    AutoVote = false
+    AutoVote = false,
+    
+    -- Cài đặt Update Units
+    AutoUpdate = false,
+    AutoUpdateRandom = false,
+    Slot1Level = 1,
+    Slot2Level = 1,
+    Slot3Level = 1,
+    Slot4Level = 1,
+    Slot5Level = 1,
+    Slot6Level = 1
 }
 ConfigSystem.CurrentConfig = {}
 
@@ -197,6 +207,21 @@ local autoVoteEnabled = ConfigSystem.CurrentConfig.AutoVote or false
 local autoRetryLoop = nil
 local autoNextLoop = nil
 local autoVoteLoop = nil
+
+-- Biến lưu trạng thái Update Units
+local autoUpdateEnabled = ConfigSystem.CurrentConfig.AutoUpdate or false
+local autoUpdateRandomEnabled = ConfigSystem.CurrentConfig.AutoUpdateRandom or false
+local autoUpdateLoop = nil
+local autoUpdateRandomLoop = nil
+local unitSlotLevels = {
+    ConfigSystem.CurrentConfig.Slot1Level or 1,
+    ConfigSystem.CurrentConfig.Slot2Level or 1,
+    ConfigSystem.CurrentConfig.Slot3Level or 1,
+    ConfigSystem.CurrentConfig.Slot4Level or 1,
+    ConfigSystem.CurrentConfig.Slot5Level or 1,
+    ConfigSystem.CurrentConfig.Slot6Level or 1
+}
+local unitSlots = {}
 
 -- Biến lưu trạng thái Time Delay
 local storyTimeDelay = ConfigSystem.CurrentConfig.StoryTimeDelay or 5
@@ -1693,11 +1718,246 @@ InGameSection:AddToggle("AutoVoteToggle", {
     end
 })
 
--- Thêm section thông tin In-Game
-local InGameInfoSection = InGameTab:AddSection("Thông tin")
+-- Hàm để scan unit trong UnitsFolder
+local function scanUnits()
+    local success, err = pcall(function()
+        -- Lấy UnitsFolder
+        local player = game:GetService("Players").LocalPlayer
+        if not player then
+            warn("Không tìm thấy LocalPlayer")
+            return
+        end
+        
+        local unitsFolder = player:FindFirstChild("UnitsFolder")
+        if not unitsFolder then
+            warn("Không tìm thấy UnitsFolder")
+            return
+        end
+        
+        -- Lấy danh sách unit theo thứ tự
+        local units = {}
+        for _, unit in ipairs(unitsFolder:GetChildren()) do
+            if unit:IsA("Folder") or unit:IsA("Model") then
+                table.insert(units, unit)
+            end
+        end
+        
+        -- Gán unit vào slot
+        unitSlots = {}
+        for i, unit in ipairs(units) do
+            if i <= 6 then -- Giới hạn 6 slot
+                unitSlots[i] = unit
+                print("Slot " .. i .. ": " .. unit.Name)
+            end
+        end
+        
+        return #unitSlots > 0
+    end)
+    
+    if not success then
+        warn("Lỗi khi scan units: " .. tostring(err))
+        return false
+    end
+    
+    return success
+end
 
-InGameInfoSection:AddParagraph({
-    Title = "Chú thích",
-    Content = "- Auto Vote: Tự động bình chọn đang chơi\n- Auto Play: Tự động điều khiển nhân vật trong game\n- Auto Retry: Tự động bình chọn thử lại khi thất bại\n- Auto Next: Tự động bình chọn để tiếp tục khi hoàn thành"
+-- Hàm để nâng cấp unit
+local function upgradeUnit(unit)
+    if not unit then
+        return false
+    end
+    
+    local success, err = pcall(function()
+        local upgradeRemote = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "Units", "Upgrade"}, 2)
+        
+        if upgradeRemote then
+            local args = {
+                [1] = unit
+            }
+            
+            upgradeRemote:FireServer(unpack(args))
+            print("Đã nâng cấp unit: " .. unit.Name)
+        else
+            warn("Không tìm thấy Remote Upgrade")
+        end
+    end)
+    
+    if not success then
+        warn("Lỗi khi nâng cấp unit: " .. tostring(err))
+        return false
+    end
+    
+    return true
+end
+
+-- Thêm section Units Update trong tab In-Game
+local UnitsUpdateSection = InGameTab:AddSection("Units Update")
+
+-- Nút Scan Units
+UnitsUpdateSection:AddButton({
+    Title = "Scan Units",
+    Callback = function()
+        local success = scanUnits()
+        
+        if success then
+            local unitInfo = "Phát hiện " .. #unitSlots .. " unit:\n"
+            for i, unit in ipairs(unitSlots) do
+                unitInfo = unitInfo .. "Slot " .. i .. ": " .. unit.Name .. "\n"
+            end
+            
+            Fluent:Notify({
+                Title = "Scan Units",
+                Content = unitInfo,
+                Duration = 5
+            })
+        else
+            Fluent:Notify({
+                Title = "Scan Units",
+                Content = "Không tìm thấy unit nào. Hãy đảm bảo bạn đang ở trong map.",
+                Duration = 3
+            })
+        end
+    end
 })
 
+-- Tạo 6 thanh kéo cho 6 slot
+for i = 1, 6 do
+    UnitsUpdateSection:AddSlider("Slot" .. i .. "LevelSlider", {
+        Title = "Slot " .. i .. " Level",
+        Default = unitSlotLevels[i],
+        Min = 1,
+        Max = 10,
+        Rounding = 0,
+        Callback = function(Value)
+            unitSlotLevels[i] = Value
+            ConfigSystem.CurrentConfig["Slot" .. i .. "Level"] = Value
+            ConfigSystem.SaveConfig()
+            print("Đã đặt cấp độ slot " .. i .. " thành: " .. Value)
+        end
+    })
+end
+
+-- Toggle Auto Update
+UnitsUpdateSection:AddToggle("AutoUpdateToggle", {
+    Title = "Auto Update",
+    Default = ConfigSystem.CurrentConfig.AutoUpdate or false,
+    Callback = function(Value)
+        autoUpdateEnabled = Value
+        ConfigSystem.CurrentConfig.AutoUpdate = Value
+        ConfigSystem.SaveConfig()
+        
+        if Value then
+            -- Scan unit trước khi bắt đầu
+            scanUnits()
+            
+            Fluent:Notify({
+                Title = "Auto Update",
+                Content = "Auto Update đã được bật",
+                Duration = 2
+            })
+            
+            -- Hủy vòng lặp cũ nếu có
+            if autoUpdateLoop then
+                autoUpdateLoop:Disconnect()
+                autoUpdateLoop = nil
+            end
+            
+            -- Tạo vòng lặp mới
+            spawn(function()
+                while autoUpdateEnabled and wait(2) do -- Cập nhật mỗi 2 giây
+                    -- Kiểm tra xem có trong map không
+                    if isPlayerInMap() then
+                        -- Lặp qua từng slot và nâng cấp theo cấp độ đã chọn
+                        for i = 1, 6 do
+                            if unitSlots[i] then
+                                for j = 1, unitSlotLevels[i] do
+                                    upgradeUnit(unitSlots[i])
+                                    wait(0.1) -- Chờ một chút giữa các lần nâng cấp
+                                end
+                            end
+                        end
+                    else
+                        -- Người chơi không ở trong map, thử scan lại
+                        scanUnits()
+                    end
+                end
+            end)
+        else
+            Fluent:Notify({
+                Title = "Auto Update",
+                Content = "Auto Update đã được tắt",
+                Duration = 2
+            })
+            
+            -- Hủy vòng lặp nếu có
+            if autoUpdateLoop then
+                autoUpdateLoop:Disconnect()
+                autoUpdateLoop = nil
+            end
+        end
+    end
+})
+
+-- Toggle Auto Update Random
+UnitsUpdateSection:AddToggle("AutoUpdateRandomToggle", {
+    Title = "Auto Update Random",
+    Default = ConfigSystem.CurrentConfig.AutoUpdateRandom or false,
+    Callback = function(Value)
+        autoUpdateRandomEnabled = Value
+        ConfigSystem.CurrentConfig.AutoUpdateRandom = Value
+        ConfigSystem.SaveConfig()
+        
+        if Value then
+            -- Scan unit trước khi bắt đầu
+            scanUnits()
+            
+            Fluent:Notify({
+                Title = "Auto Update Random",
+                Content = "Auto Update Random đã được bật",
+                Duration = 2
+            })
+            
+            -- Hủy vòng lặp cũ nếu có
+            if autoUpdateRandomLoop then
+                autoUpdateRandomLoop:Disconnect()
+                autoUpdateRandomLoop = nil
+            end
+            
+            -- Tạo vòng lặp mới
+            spawn(function()
+                while autoUpdateRandomEnabled and wait(2) do -- Cập nhật mỗi 2 giây
+                    -- Kiểm tra xem có trong map không
+                    if isPlayerInMap() and #unitSlots > 0 then
+                        -- Chọn ngẫu nhiên một slot để nâng cấp
+                        local randomIndex = math.random(1, #unitSlots)
+                        if unitSlots[randomIndex] then
+                            upgradeUnit(unitSlots[randomIndex])
+                        end
+                    else
+                        -- Người chơi không ở trong map, thử scan lại
+                        scanUnits()
+                    end
+                end
+            end)
+        else
+            Fluent:Notify({
+                Title = "Auto Update Random",
+                Content = "Auto Update Random đã được tắt",
+                Duration = 2
+            })
+            
+            -- Hủy vòng lặp nếu có
+            if autoUpdateRandomLoop then
+                autoUpdateRandomLoop:Disconnect()
+                autoUpdateRandomLoop = nil
+            end
+        end
+    end
+})
+
+-- Tự động scan unit khi bắt đầu
+spawn(function()
+    wait(5) -- Đợi 5 giây để game load
+    scanUnits()
+end)
