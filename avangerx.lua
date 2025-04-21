@@ -222,7 +222,7 @@ local unitSlotLevels = {
     ConfigSystem.CurrentConfig.Slot6Level or 1
 }
 local unitSlots = {}
-local unitSliderComponents = {}
+local unitSliderNames = {}
 
 -- Biến lưu trạng thái Time Delay
 local storyTimeDelay = ConfigSystem.CurrentConfig.StoryTimeDelay or 5
@@ -1745,19 +1745,12 @@ local function scanUnits()
         
         -- Gán unit vào slot
         unitSlots = {}
+        unitSliderNames = {}
         for i, unit in ipairs(units) do
             if i <= 6 then -- Giới hạn 6 slot
                 unitSlots[i] = unit
+                unitSliderNames[i] = "Slot " .. i .. ": " .. unit.Name
                 print("Slot " .. i .. ": " .. unit.Name)
-            end
-        end
-        
-        -- Cập nhật UI với tên unit
-        for i = 1, 6 do
-            if unitSliderComponents[i] and unitSlots[i] then
-                unitSliderComponents[i]:SetTitle("Slot " .. i .. ": " .. unitSlots[i].Name)
-            elseif unitSliderComponents[i] then
-                unitSliderComponents[i]:SetTitle("Slot " .. i .. ": (Trống)")
             end
         end
         
@@ -1833,8 +1826,8 @@ UnitsUpdateSection:AddButton({
 
 -- Tạo 6 thanh kéo cho 6 slot
 for i = 1, 6 do
-    local sliderTitle = "Slot " .. i .. ": (Đang quét...)"
-    local slider = UnitsUpdateSection:AddSlider({
+    local sliderTitle = "Slot " .. i .. " Level"
+    UnitsUpdateSection:AddSlider({
         Title = sliderTitle,
         Default = unitSlotLevels[i],
         Min = 1,
@@ -1847,7 +1840,6 @@ for i = 1, 6 do
             print("Đã đặt cấp độ slot " .. i .. " thành: " .. Value)
         end
     })
-    unitSliderComponents[i] = slider
 end
 
 -- Tự động scan unit mỗi 10 giây
@@ -1856,6 +1848,10 @@ spawn(function()
         pcall(function()
             if isPlayerInMap() then
                 scanUnits()
+                -- Cập nhật tên unit sau khi scan thành công
+                for i, name in pairs(unitSliderNames) do
+                    print("Unit scanned: " .. name)
+                end
             end
         end)
     end
