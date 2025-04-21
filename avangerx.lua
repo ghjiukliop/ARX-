@@ -700,36 +700,27 @@ StorySection:AddButton({
 })
 
 -- Hiển thị trạng thái trong game
-local statusLabel = StorySection:AddParagraph({
+StorySection:AddParagraph({
     Title = "Trạng thái",
-    Content = isPlayerInMap() and "Đang ở trong map" or "Đang ở sảnh chờ"
+    Content = "Nhấn nút bên dưới để cập nhật trạng thái"
 })
 
--- Sử dụng pcall để bọc gọi hàm SetContent để tránh lỗi
-local function safeSetContent(component, content)
-    if not component then return false end
-    
-    local success, err = pcall(function()
-        component:SetContent(content)
-    end)
-    
-    if not success then
-        warn("Lỗi khi set content: " .. tostring(err))
-        return false
+-- Thêm nút cập nhật trạng thái
+StorySection:AddButton({
+    Title = "Cập nhật trạng thái",
+    Callback = function()
+        local statusText = isPlayerInMap() and "Đang ở trong map" or "Đang ở sảnh chờ"
+        
+        -- Hiển thị thông báo với trạng thái hiện tại
+        Fluent:Notify({
+            Title = "Trạng thái hiện tại",
+            Content = statusText,
+            Duration = 3
+        })
+        
+        print("Trạng thái: " .. statusText)
     end
-    
-    return true
-end
-
--- Cập nhật trạng thái định kỳ
-local statusUpdateTimer = nil
-statusUpdateTimer = spawn(function()
-    while wait(5) do
-        if statusLabel then
-            safeSetContent(statusLabel, isPlayerInMap() and "Đang ở trong map" or "Đang ở sảnh chờ")
-        end
-    end
-end)
+})
 
 -- Thêm section Summon trong tab Shop
 local SummonSection = ShopTab:AddSection("Summon")
@@ -1541,3 +1532,4 @@ BossEventSection:AddButton({
         end
     end
 })
+
