@@ -104,12 +104,12 @@ ConfigSystem.DefaultConfig = {
     -- Cài đặt Update Units
     AutoUpdate = false,
     AutoUpdateRandom = false,
-    Slot1Level = 1,
-    Slot2Level = 1,
-    Slot3Level = 1,
-    Slot4Level = 1,
-    Slot5Level = 1,
-    Slot6Level = 1
+    Slot1Level = 0,
+    Slot2Level = 0,
+    Slot3Level = 0,
+    Slot4Level = 0,
+    Slot5Level = 0,
+    Slot6Level = 0
 }
 ConfigSystem.CurrentConfig = {}
 
@@ -214,15 +214,14 @@ local autoUpdateRandomEnabled = ConfigSystem.CurrentConfig.AutoUpdateRandom or f
 local autoUpdateLoop = nil
 local autoUpdateRandomLoop = nil
 local unitSlotLevels = {
-    ConfigSystem.CurrentConfig.Slot1Level or 1,
-    ConfigSystem.CurrentConfig.Slot2Level or 1,
-    ConfigSystem.CurrentConfig.Slot3Level or 1,
-    ConfigSystem.CurrentConfig.Slot4Level or 1,
-    ConfigSystem.CurrentConfig.Slot5Level or 1,
-    ConfigSystem.CurrentConfig.Slot6Level or 1
+    ConfigSystem.CurrentConfig.Slot1Level or 0,
+    ConfigSystem.CurrentConfig.Slot2Level or 0,
+    ConfigSystem.CurrentConfig.Slot3Level or 0,
+    ConfigSystem.CurrentConfig.Slot4Level or 0,
+    ConfigSystem.CurrentConfig.Slot5Level or 0,
+    ConfigSystem.CurrentConfig.Slot6Level or 0
 }
 local unitSlots = {}
-local unitSliderNames = {}
 
 -- Biến lưu trạng thái Time Delay
 local storyTimeDelay = ConfigSystem.CurrentConfig.StoryTimeDelay or 5
@@ -1726,18 +1725,18 @@ local function scanUnits()
         local player = game:GetService("Players").LocalPlayer
         if not player then
             warn("Không tìm thấy LocalPlayer")
-            return false
+            return
         end
         
         local unitsFolder = player:FindFirstChild("UnitsFolder")
         if not unitsFolder then
             warn("Không tìm thấy UnitsFolder")
-            return false
+            return
         end
         
         -- Lấy danh sách unit theo thứ tự
         local units = {}
-        for _, unit in pairs(unitsFolder:GetChildren()) do
+        for _, unit in ipairs(unitsFolder:GetChildren()) do
             if unit:IsA("Folder") or unit:IsA("Model") then
                 table.insert(units, unit)
             end
@@ -1745,11 +1744,9 @@ local function scanUnits()
         
         -- Gán unit vào slot
         unitSlots = {}
-        unitSliderNames = {}
         for i, unit in ipairs(units) do
             if i <= 6 then -- Giới hạn 6 slot
                 unitSlots[i] = unit
-                unitSliderNames[i] = "Slot " .. i .. ": " .. unit.Name
                 print("Slot " .. i .. ": " .. unit.Name)
             end
         end
@@ -1826,11 +1823,10 @@ UnitsUpdateSection:AddButton({
 
 -- Tạo 6 thanh kéo cho 6 slot
 for i = 1, 6 do
-    local sliderTitle = "Slot " .. i .. " Level"
-    UnitsUpdateSection:AddSlider({
-        Title = sliderTitle,
+    UnitsUpdateSection:AddSlider("Slot" .. i .. "LevelSlider", {
+        Title = "Slot " .. i .. " Level",
         Default = unitSlotLevels[i],
-        Min = 1,
+        Min = 0,
         Max = 10,
         Rounding = 0,
         Callback = function(Value)
@@ -1841,40 +1837,6 @@ for i = 1, 6 do
         end
     })
 end
-
--- Tự động scan unit mỗi 10 giây
-spawn(function()
-    while wait(10) do
-        pcall(function()
-            if isPlayerInMap() then
-                scanUnits()
-                -- Cập nhật tên unit sau khi scan thành công
-                for i, name in pairs(unitSliderNames) do
-                    print("Unit scanned: " .. name)
-                end
-            end
-        end)
-    end
-end)
-
--- Tự động scan unit khi bắt đầu
-spawn(function()
-    wait(3) -- Đợi 3 giây để game load
-    scanUnits()
-    
-    -- Theo dõi khi người chơi vào map mới
-    local oldInMap = isPlayerInMap()
-    while wait(1) do
-        local newInMap = isPlayerInMap()
-        if newInMap ~= oldInMap then
-            oldInMap = newInMap
-            if newInMap then
-                wait(1) -- Đợi map load
-                scanUnits()
-            end
-        end
-    end
-end)
 
 -- Toggle Auto Update
 UnitsUpdateSection:AddToggle("AutoUpdateToggle", {
@@ -1993,3 +1955,9 @@ UnitsUpdateSection:AddToggle("AutoUpdateRandomToggle", {
         end
     end
 })
+
+-- Tự động scan unit khi bắt đầu
+spawn(function()
+    wait(5) -- Đợi 5 giây để game load
+    scanUnits()
+end)
