@@ -222,6 +222,7 @@ local unitSlotLevels = {
     ConfigSystem.CurrentConfig.Slot6Level or 1
 }
 local unitSlots = {}
+local unitSliderComponents = {}
 
 -- Biến lưu trạng thái Time Delay
 local storyTimeDelay = ConfigSystem.CurrentConfig.StoryTimeDelay or 5
@@ -1725,18 +1726,18 @@ local function scanUnits()
         local player = game:GetService("Players").LocalPlayer
         if not player then
             warn("Không tìm thấy LocalPlayer")
-            return
+            return false
         end
         
         local unitsFolder = player:FindFirstChild("UnitsFolder")
         if not unitsFolder then
             warn("Không tìm thấy UnitsFolder")
-            return
+            return false
         end
         
         -- Lấy danh sách unit theo thứ tự
         local units = {}
-        for _, unit in ipairs(unitsFolder:GetChildren()) do
+        for _, unit in pairs(unitsFolder:GetChildren()) do
             if unit:IsA("Folder") or unit:IsA("Model") then
                 table.insert(units, unit)
             end
@@ -1748,6 +1749,15 @@ local function scanUnits()
             if i <= 6 then -- Giới hạn 6 slot
                 unitSlots[i] = unit
                 print("Slot " .. i .. ": " .. unit.Name)
+            end
+        end
+        
+        -- Cập nhật UI với tên unit
+        for i = 1, 6 do
+            if unitSliderComponents[i] and unitSlots[i] then
+                unitSliderComponents[i]:SetTitle("Slot " .. i .. ": " .. unitSlots[i].Name)
+            elseif unitSliderComponents[i] then
+                unitSliderComponents[i]:SetTitle("Slot " .. i .. ": (Trống)")
             end
         end
         
@@ -1823,8 +1833,9 @@ UnitsUpdateSection:AddButton({
 
 -- Tạo 6 thanh kéo cho 6 slot
 for i = 1, 6 do
-    UnitsUpdateSection:AddSlider("Slot" .. i .. "LevelSlider", {
-        Title = "Slot " .. i .. " Level",
+    local sliderTitle = "Slot " .. i .. ": (Đang quét...)"
+    local slider = UnitsUpdateSection:AddSlider({
+        Title = sliderTitle,
         Default = unitSlotLevels[i],
         Min = 1,
         Max = 10,
@@ -1836,7 +1847,38 @@ for i = 1, 6 do
             print("Đã đặt cấp độ slot " .. i .. " thành: " .. Value)
         end
     })
+    unitSliderComponents[i] = slider
 end
+
+-- Tự động scan unit mỗi 10 giây
+spawn(function()
+    while wait(10) do
+        pcall(function()
+            if isPlayerInMap() then
+                scanUnits()
+            end
+        end)
+    end
+end)
+
+-- Tự động scan unit khi bắt đầu
+spawn(function()
+    wait(3) -- Đợi 3 giây để game load
+    scanUnits()
+    
+    -- Theo dõi khi người chơi vào map mới
+    local oldInMap = isPlayerInMap()
+    while wait(1) do
+        local newInMap = isPlayerInMap()
+        if newInMap ~= oldInMap then
+            oldInMap = newInMap
+            if newInMap then
+                wait(1) -- Đợi map load
+                scanUnits()
+            end
+        end
+    end
+end)
 
 -- Toggle Auto Update
 UnitsUpdateSection:AddToggle("AutoUpdateToggle", {
@@ -1955,9 +1997,3 @@ UnitsUpdateSection:AddToggle("AutoUpdateRandomToggle", {
         end
     end
 })
-
--- Tự động scan unit khi bắt đầu
-spawn(function()
-    wait(5) -- Đợi 5 giây để game load
-    scanUnits()
-end)
